@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ----- ENUM -----
+
+enum Role {
+  ADMIN 
+  ATENDENTE
+  TECNICO
+  CLIENTE
+}
+
+enum StatusOS {
+  ABERTA
+  EM_DIAGNOSTICO
+  AGUARDANDO_APROVACAO
+  EM_REPARO
+  AGUARDANDO_PECA
+  CONCLUIDA
+  ENTREGUE
+  CANCELADA
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+}
+
+enum TipoItemOS {
+  PECA
+  SERVICO
+}
+
+enum TipoAgendamento {
+  AVALIACAO
+  ENTREGA
+  VISITA_TECNICA
+}
+
+enum StatusAgendamento {
+  AGENDADO
+  CONFIRMADO
+  REALIZADO
+  CANCELADO
+}
+
+// user e auth
+
+model User {
+  id           String   @id @default(uuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String
+  role         Role     @default(ATENDENTE)
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Preenchido apenas quando role = CLIENTE — vincula o login ao cadastro de cliente
+  clienteId    String?  @unique
+  cliente      Cliente? @relation(fields: [clienteId], references: [id])
+
+  // Relações — um técnico é um User com role TECNICO
+  ordensComoTecnico    OrdemServico[]  @relation("TecnicoResponsavel")
+  agendamentos         Agendamento[]
+  movimentacoesEstoque MovimentacaoEstoque[]
+
+  @@map("users")
+}
+
+// clientes e equip
+
+model Cliente {
+  id          String   @id @default(uuid())
+  nome        String
+  documento   String?  @unique // CPF/CNPJ
+  telefone    String?
+  email       String?
+  endereco    String?
+  cidade      String?
+  estado      String?
+  observacoes String?
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usuario       User?          // login do portal do cliente, se houver
+  equipamentos  Equipamento[]
+  ordensServico OrdemServico[]
+  agendamentos  Agendamento[]
+
+  @@index([nome])
+  @@map("clientes")
+}
+
+model Equipamento {
+  id            String   @id @default(uuid())
+  clienteId     String
+  cliente       Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  tipo          String   // ex: Notebook, Impressora, Ar-condicionado
+  marca         String?
+  modelo        String?
+  numeroSerie   String?
+  observacoes   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ordensServico OrdemServico[]
+
+  @@index([clienteId])
+  @@map("equipamentos")
+}
+
+// ordem de serviço
+
+model OrdemServico {
+  id                String   @id @default(uuid())
+  numero            Int      @unique @default(autoincrement())
+
+  clienteId         String
+  cliente           Cliente  @relation(fields: [clienteId], references: [id])
+
+  equipamentoId     String?
+  equipamento       Equipamento? @relation(fields: [equipamentoId], references: [id])
+
+  tecnicoId         String?
+  tecnico           User?    @relation("TecnicoResponsavel", fields: [tecnicoId], references: [id])
+
+  status            StatusOS @default(ABERTA)
+  defeitoRelatado   String
+  laudoTecnico      String?
+  observacoesInternas String?
+
+  valorOrcamento    Decimal? @db.Decimal(10, 2)
+  valorTotal        Decimal? @db.Decimal(10, 2)
+
+  dataAbertura      DateTime @default(now())
+  dataPrevisao      DateTime?
+  dataConclusao     DateTime?
+  dataEntrega       DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  itens             ItemOS[]
+  agendamentos      Agendamento[]
+  movimentacoesEstoque MovimentacaoEstoque[]
+  historico         HistoricoStatusOS[]
+
+  @@index([clienteId])
+  @@index([tecnicoId])
+  @@index([status])
+  @@map("ordens_servico")
+}
+
+model HistoricoStatusOS {
+  id             String   @id @default(uuid())
+  ordemServicoId String
+  ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+
+  statusAnterior StatusOS?
+  statusNovo     StatusOS
+  observacao     String?
+  createdAt      DateTime @default(now())
+
+  @@index([ordemServicoId])
+  @@map("historico_status_os")
+}
+
+// itens ou serviços
+
+model ItemOS {
+  id             String   @id @default(uuid())
+  ordemServicoId String
+  ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+
+  tipo           TipoItemOS
+  pecaId         String?
+  peca           Peca?    @relation(fields: [pecaId], references: [id])
+
+  descricao      String   
+  quantidade     Decimal  @default(1) @db.Decimal(10, 2)
+  valorUnitario  Decimal  @db.Decimal(10, 2)
+  valorTotal     Decimal  @db.Decimal(10, 2)
+
+  createdAt      DateTime @default(now())
+
+  @@index([ordemServicoId])
+  @@map("itens_os")
+}
+
+// estoque
+
+model Peca {
+  id             String   @id @default(uuid())
+  sku            String   @unique
+  nome           String
+  descricao      String?
+  quantidadeAtual Int     @default(0)
+  quantidadeMinima Int    @default(0)
+  precoCusto     Decimal? @db.Decimal(10, 2)
+  precoVenda     Decimal  @db.Decimal(10, 2)
+  ativo          Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  itensOS        ItemOS[]
+  movimentacoes  MovimentacaoEstoque[]
+
+  @@index([nome])
+  @@map("pecas")
+}
+
+model MovimentacaoEstoque {
+  id             String   @id @default(uuid())
+  pecaId         String
+  peca           Peca     @relation(fields: [pecaId], references: [id])
+
+  tipo           TipoMovimentacao
+  quantidade     Int
+  motivo         String?
+
+  ordemServicoId String?
+  ordemServico   OrdemServico? @relation(fields: [ordemServicoId], references: [id])
+
+  usuarioId      String
+  usuario        User     @relation(fields: [usuarioId], references: [id])
+
+  createdAt      DateTime @default(now())
+
+  @@index([pecaId])
+  @@map("movimentacoes_estoque")
+}
+
+// agenda
+
+model Agendamento {
+  id             String   @id @default(uuid())
+
+  clienteId      String
+  cliente        Cliente  @relation(fields: [clienteId], references: [id])
+
+  tecnicoId      String?
+  tecnico        User?    @relation(fields: [tecnicoId], references: [id])
+
+  ordemServicoId String?
+  ordemServico   OrdemServico? @relation(fields: [ordemServicoId], references: [id])
+
+  tipo           TipoAgendamento
+  status         StatusAgendamento @default(AGENDADO)
+  dataHora       DateTime
+  duracaoMinutos Int      @default(60)
+  observacoes    String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tecnicoId, dataHora])
+  @@index([clienteId])
+  @@map("agendamentos")
+}
