@@ -19,3 +19,27 @@ import {
 import { EquipamentosService } from './equipamentos.service';
 import { CreateEquipamentoDto } from './dto/create-equipamento.dto';
 import { UpdateEquipamentoDto } from './dto/update-equipamento.dto';
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('equipamentos')
+export class EquipamentosController {
+  constructor(private readonly equipamentosService: EquipamentosService) {}
+
+  @Post()
+  @Roles(Role.ADMIN, Role.ATENDENTE)
+  create(@Body() dto: CreateEquipamentoDto) {
+    return this.equipamentosService.create(dto);
+  }
+
+    @Get()
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.TECNICO, Role.CLIENTE)
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.equipamentosService.findAll(user);
+  }
+
+  @Get(':id')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.TECNICO, Role.CLIENTE)
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.equipamentosService.findOne(id, user);
+  }
+}
