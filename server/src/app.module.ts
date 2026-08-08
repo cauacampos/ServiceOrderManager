@@ -7,7 +7,8 @@ import { ClientesModule } from './clientes/clientes.module';
 import { EquipamentosModule } from './equipamentos/equipamentos.module';
 
 @Module({
-  imports: [AuthModule, PrismaModule, ClientesModule, EquipamentosModule],
+  imports: [AuthModule, PrismaModule, ClientesModule,
+            EquipamentosModule, OrdensServicoModule],
   controllers: [AppController],
   providers: [AppService],
 })
