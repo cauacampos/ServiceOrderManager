@@ -17,8 +17,6 @@ import { transicaoEhValida } from './status-transitions';
 export class OrdensServicoService {
   constructor(private prisma: PrismaService) {}
 
-  // Cria a OS já com status ABERTA e grava a primeira entrada no histórico
-  // (statusAnterior null → statusNovo ABERTA), tudo numa transação.
   create(dto: CreateOrdemServicoDto) {
     return this.prisma.$transaction(async (tx) => {
       const os = await tx.ordemServico.create({ data: dto });
